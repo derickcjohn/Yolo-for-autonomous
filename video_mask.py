@@ -54,11 +54,21 @@ while True:
 
                     x1, y1, x2, y2 = map(int, box)
 
-                    fill_color = colors(cls, True)   # YOLO default color
-                    border_color = darker(fill_color)
+                    # ---- Bottom 25% region ----
+                    h = y2 - y1
+                    y1_new = int(y2 - 0.25 * h)
 
-                    cv2.rectangle(output, (x1,y1), (x2,y2), fill_color, -1)
-                    cv2.rectangle(output, (x1,y1), (x2,y2), border_color, 3)
+                    # ---- Color logic ----
+                    if cls in [0, 1]:  # person, bicycle
+                        color = (0, 0, 255)  # Red (BGR)
+                    elif cls in [2, 3, 5, 7]:  # vehicles
+                        color = (255, 0, 0)  # Blue (BGR)
+                    else:
+                        color = colors(cls, True)
+                    border_color = darker(color)
+
+                    cv2.rectangle(output, (x1,y1_new), (x2,y2), color, -1)
+                    cv2.rectangle(output, (x1,y1_new), (x2,y2), border_color, 3)
 
             out.write(output)
 
