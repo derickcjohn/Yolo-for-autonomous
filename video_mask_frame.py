@@ -1,3 +1,4 @@
+# Same as video_mask_batch.py, but only process 1 frame at a time.
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -12,7 +13,8 @@ input_video = "street.mp4"
 output_video = "output.mp4"
 
 # Classes you want to keep
-classes_to_keep = [0,1,2,3,5,7,9,10,11,12]
+# classes_to_keep = [0,1,2,3,5,7,9,10,11,12]
+classes_to_keep = [0,1,9,10,11,12]
 
 cap = cv2.VideoCapture(input_video)
 
@@ -24,9 +26,6 @@ fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
 
 # colour = colors()
-
-batch_size = 8
-frame_batch = []
 
 def darker(color, factor=0.5):
     return tuple(int(c * factor) for c in color)
@@ -43,13 +42,21 @@ def draw_segmentation_on_black(frame, seg_result, canvas):
     classes = seg_result.boxes.cls.cpu().numpy().astype(int)
 
     for mask, cls in zip(masks, classes):
-        color = colors(cls, True)
-
         # Resize mask to frame size
         mask = cv2.resize(mask, (frame.shape[1], frame.shape[0]))
-        mask = mask > 0.5
+        binary_mask = (mask > 0.5).astype(np.uint8)
+        
+        if cls in [3]:
+            color = (0, 255, 255)
+        else:
+            color = colors(cls, True)
 
-        canvas[mask] = color
+        canvas[binary_mask == 1] = color
+
+        # -----DRAW BORDER-----
+        if cls != 3:  # skip border for vehicles
+            contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(canvas, contours, -1, (0, 0, 0), 2)
 
     return canvas
 
@@ -73,8 +80,8 @@ def draw_detection_on_canvas(det_result, canvas):
 
         if cls in [0, 1]:
             color = (0, 0, 255)
-        elif cls in [2, 3, 5, 7]:
-            color = (255, 0, 0)
+        # elif cls in [2, 3, 5, 7]:
+        #     color = (255, 0, 0)
         else:
             color = colors(cls, True)
 
