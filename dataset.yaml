@@ -1,0 +1,11 @@
+path: dataset_split # dataset root dir
+train: train # train images (relative to 'path') 4 images
+val: val # val images (relative to 'path') 4 images
+test: # test images (optional)
+
+# Classes
+names:
+  0: crosswalk
+  1: sidewalk
+  2: road
+  3: vehicle
