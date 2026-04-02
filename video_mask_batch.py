@@ -93,8 +93,8 @@ def draw_detection_on_canvas(det_result, canvas):
 
         if cls in [0, 1]:
             color = (0, 0, 255)
-        elif cls in [2, 3, 5, 7]:
-            color = (255, 0, 0)
+        # elif cls in [2, 3, 5, 7]:
+        #     color = (255, 0, 0)
         else:
             color = colors(cls, True)
 
