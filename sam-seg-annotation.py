@@ -12,12 +12,22 @@ output_lbl_dir = "datasets/labels"
 os.makedirs(output_img_dir, exist_ok=True)
 os.makedirs(output_lbl_dir, exist_ok=True)
 
-classes = ["crosswalk", "sidewalk", "road"]
-class_map = {name: i for i, name in enumerate(classes)}
+target_classes = ["crosswalk", "sidewalk", "road", "vehicle"]
+class_map = {
+    "crosswalk": 0,
+    "sidewalk": 1,
+    "pavement": 2,
+    "road": 3,
+    "vehicle": 4,
+    "manhole cover": 5,
+    "road marking": 6,
+}
+
+prompt_classes = list(class_map.keys())
 
 # SAM3 predictor
 overrides = dict(
-    conf=0.25,
+    conf=0.5,
     task="segment",
     mode="predict",
     model="sam3.pt",
@@ -37,34 +47,117 @@ for img_name in os.listdir(frame_dir):
     h, w = image.shape[:2]
 
     predictor.set_image(img_path)
-    results = predictor(text=classes)
+    results = predictor(text=prompt_classes)
 
     label_lines = []
 
     # results[0].masks.data → segmentation masks
     if results and results[0].masks is not None:
         masks = results[0].masks.data.cpu().numpy()
-        class_ids = results[0].boxes.cls.cpu().numpy().astype(int)
+        class_ids_raw = results[0].boxes.cls.cpu().numpy().astype(int)
+        names = results[0].names
 
-        for mask, cls_id in zip(masks, class_ids):
-            mask = (mask > 0.5).astype(np.uint8)
+        # 1. First, merge masks of the same class
+        raw_merged = {i: np.zeros((h, w), dtype=np.uint8) for i in set(class_map.values())}
+        for mask, raw_id in zip(masks, class_ids_raw):
+            target_id = class_map[names[raw_id]]
+            binary_mask = (mask > 0.5).astype(np.uint8)
+            raw_merged[target_id] = cv2.bitwise_or(raw_merged[target_id], binary_mask)
 
-            # Find contours → polygon
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        final_vehicle = raw_merged.get(4, np.zeros((h, w), dtype=np.uint8))
+        crosswalk = raw_merged.get(0, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
+        sidewalk = raw_merged.get(1, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
+        pavement = raw_merged.get(2, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
+        road = raw_merged.get(3, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
+        manhole = raw_merged.get(5, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
+        road_marking = raw_merged.get(6, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
 
+        # Apply semantic remapping first
+        sidewalk = sidewalk | manhole
+        road = road | road_marking
+
+        # Crosswalk overrides everything
+        sidewalk = sidewalk & (~crosswalk)
+        pavement = pavement & (~crosswalk)
+        road = road & (~crosswalk)
+        
+        # -------- RULES --------
+        # sidewalk + pavement + road -> sidewalk
+        rule1 = sidewalk & pavement & road
+        # rule1 =  pavement & road
+
+        # pavement + road -> road
+        rule2 = pavement & road & (~sidewalk)
+        # rule2 = pavement & road
+
+        # sidewalk + road -> road
+        rule3 = sidewalk & road & (~pavement)
+        # rule3 = road & (~pavement)
+
+        # pavement only -> sidewalk
+        rule4 = pavement & (~road) & (~sidewalk)
+        # rule4 = pavement & (~road)
+
+        # sidewalk only -> sidewalk
+        rule5 = sidewalk & (~road)
+        rule5 = sidewalk
+
+        # road only -> road
+        rule6 = road & (~sidewalk) & (~pavement)
+        # rule6 = road & (~pavement)
+
+        # Final outputs
+        final_sidewalk = rule1 | rule4 | rule5
+        final_road = rule2 | rule3 | rule6
+        final_crosswalk = crosswalk
+
+        min_area_ratio = 0.0008   # tune this
+        min_area = min_area_ratio * (h * w)
+
+        processed_masks = {
+            3: final_vehicle,
+            0: final_crosswalk, 
+            1: final_sidewalk, 
+            2: final_road
+        }
+
+        # 3. Extract Simplified Polygons
+        for target_id, final_mask in processed_masks.items():
+            if np.sum(final_mask) == 0:
+                continue
+
+            kernel = np.ones((5,5), np.uint8)
+            final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel)
+            # Remove tiny regions using connected components
+            num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(final_mask, connectivity=8)
+
+            cleaned_mask = np.zeros_like(final_mask)
+
+            for i in range(1, num_labels):  # skip background
+                area = stats[i, cv2.CC_STAT_AREA]
+                if area > min_area:
+                    cleaned_mask[labels == i] = 1
+
+            processed_masks[target_id] = cleaned_mask
+
+            # Find external contours for the cleaned mask
+            contours, _ = cv2.findContours(cleaned_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
             for cnt in contours:
-                if len(cnt) < 3:
+                area = cv2.contourArea(cnt)
+                if area < min_area:
+                    continue
+                # Simplify geometry to keep YOLO files lightweight
+                epsilon = 0.0015 * cv2.arcLength(cnt, True)
+                approx = cv2.approxPolyDP(cnt, epsilon, True)
+                
+                if len(approx) < 3: 
                     continue
 
-                # Normalize polygon points
-                polygon = []
-                for point in cnt:
-                    x = point[0][0] / w
-                    y = point[0][1] / h
-                    polygon.append(f"{x:.6f} {y:.6f}")
-
-                line = f"{cls_id} " + " ".join(polygon)
-                label_lines.append(line)
+                # Normalize and format for YOLO
+                polygon_points = [f"{p[0][0]/w:.6f} {p[0][1]/h:.6f}" for p in approx]
+                label_lines.append(f"{target_id} " + " ".join(polygon_points))
 
     # Save only if at least one object detected
     if len(label_lines) > 0:
