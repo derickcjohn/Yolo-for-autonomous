@@ -118,8 +118,47 @@ for img_name in os.listdir(frame_dir):
         manhole = raw_merged.get(5, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
         road_marking = raw_merged.get(6, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
 
+        if np.sum(manhole) > 0:
+            # Find individual manhole contours and assign them to road or sidewalk based on location
+            manhole_contours, _ = cv2.findContours(manhole, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            for cnt in manhole_contours:
+                single_manhole = np.zeros((h, w), dtype=np.uint8)
+                cv2.drawContours(single_manhole, [cnt], -1, 1, thickness=cv2.FILLED)
+
+                kernel = np.ones((31,31), np.uint8)
+                dilated = cv2.dilate(single_manhole, kernel, iterations=1)
+                ring = dilated & (~single_manhole)
+
+                context_score = {
+                    "road": np.sum(ring & road),
+                    "sidewalk": np.sum(ring & sidewalk),
+                    "crosswalk": np.sum(ring & crosswalk),
+                    "pavement": np.sum(ring & pavement)}
+
+                best_class = max(context_score, key=context_score.get)
+
+                if context_score[best_class] > 0:
+                    class_id = class_map[best_class]
+                    raw_merged[class_id] = cv2.bitwise_or(raw_merged[class_id], single_manhole)
+                else:
+                    raw_merged[3] = cv2.bitwise_or(raw_merged[3], single_manhole)
+
+                mask = np.zeros((h, w), dtype=np.uint8)
+                cv2.drawContours(mask, [cnt], -1, 1, thickness=cv2.FILLED)
+
+                # Check overlap with road and sidewalk
+                road_overlap = np.sum(mask & road)
+                sidewalk_overlap = np.sum(mask & sidewalk)
+
+                if road_overlap > sidewalk_overlap:
+                    road = cv2.bitwise_or(road, mask)
+                else:
+                    sidewalk = cv2.bitwise_or(sidewalk, mask)
+
+            raw_merged[5] = np.zeros((h, w), dtype=np.uint8)
+        
         # Apply semantic remapping first
-        road = road | road_marking | manhole
+        road = road | road_marking
 
         # Crosswalk overrides everything
         sidewalk = sidewalk & (~crosswalk)
