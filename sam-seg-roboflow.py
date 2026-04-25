@@ -6,9 +6,9 @@ from shapely.geometry import Polygon
 from inference_sdk import InferenceHTTPClient
 
 # ---------------- CONFIG ----------------
-frame_dir = "test"
-output_img_dir = "datasets/images"
-output_lbl_dir = "datasets/labels"
+frame_dir = "frames"
+output_img_dir = "dataset_preprocess/images"
+output_lbl_dir = "dataset_preprocess/labels"
 
 os.makedirs(output_img_dir, exist_ok=True)
 os.makedirs(output_lbl_dir, exist_ok=True)
@@ -21,6 +21,11 @@ class_map = {
     "vehicle": 4,
     "manhole cover": 5,
     "road marking": 6,
+    "step": 7,
+    "sidewalk border": 8,
+    "drain cover": 9,
+    "gully grate": 10,
+    
 }
 
 # Connect to Roboflow
@@ -47,7 +52,7 @@ def polygon_to_mask(points, h, w):
     cv2.fillPoly(mask, [pts], 1)
 
     return mask
-
+print("Processing frames...")
 # --------------- PROCESS FRAMES ---------------
 for img_name in os.listdir(frame_dir):
     if not img_name.lower().endswith((".jpg", ".png")):
@@ -109,14 +114,21 @@ for img_name in os.listdir(frame_dir):
                 binary_mask = np.squeeze(binary_mask)
             raw_merged[target_id] = cv2.bitwise_or(raw_merged[target_id], binary_mask)
 
-        # 2. Apply remapping rules
+        # 2. Apply remapping rules 
+        step = raw_merged.get(7, np.zeros((h, w), dtype=np.uint8))
+        sidewalk_border = raw_merged.get(8, np.zeros((h, w), dtype=np.uint8))
         final_vehicle = raw_merged.get(4, np.zeros((h, w), dtype=np.uint8))
         crosswalk = raw_merged.get(0, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
-        sidewalk = raw_merged.get(1, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
-        pavement = raw_merged.get(2, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
+        sidewalk = raw_merged.get(1, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle & ~step)
+        pavement = raw_merged.get(2, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle & ~step)
         road = raw_merged.get(3, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
         manhole = raw_merged.get(5, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
         road_marking = raw_merged.get(6, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
+        drain_cover = raw_merged.get(9, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
+        gully_grate = raw_merged.get(10, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
+        
+        manhole = manhole | drain_cover | gully_grate
+        
 
         if np.sum(manhole) > 0:
             # Find individual manhole contours and assign them to road or sidewalk based on location
@@ -175,26 +187,30 @@ for img_name in os.listdir(frame_dir):
         # sidewalk + road -> sidewalk
         rule3 = sidewalk & road & (~pavement)
 
+        # sidewalk + pavement -> sidewalk
+        rule4 = sidewalk & pavement & (~road)
+
         # pavement only -> sidewalk
-        rule4 = pavement & (~road) & (~sidewalk)
+        rule5 = pavement & (~road) & (~sidewalk)
+        # rule4 = pavement & (~road)
 
         # sidewalk only -> sidewalk
-        rule5 = sidewalk & (~road)
-        rule5 = sidewalk
-
+        rule6 = sidewalk & (~road)
+        
         # road only -> road
-        rule6 = road & (~sidewalk) & (~pavement)
+        rule7 = road & (~sidewalk) & (~pavement)
+        # rule6 = road & (~pavement)
 
         # Final outputs
-        final_sidewalk = rule1 | rule3 | rule4 | rule5
-        final_road = rule2 | rule6
-        final_crosswalk = crosswalk
-
+        final_sidewalk = rule1 | rule3 | rule4 | rule5 | rule6
+        final_road = rule2 | rule7
+        
         processed_masks = {
             3: final_vehicle,
-            0: final_crosswalk, 
+            0: crosswalk, 
             1: final_sidewalk, 
-            2: final_road
+            2: final_road,
+            4: sidewalk_border,
         }
 
         # 3. Extract Simplified Polygons
@@ -246,6 +262,6 @@ for img_name in os.listdir(frame_dir):
             for line in label_lines:
                 f.write(line + "\n")
     
-    print(f"Processed: {img_name}")
+    #print(f"Processed: {img_name}")
 
 print("Done.")
