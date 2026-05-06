@@ -17,6 +17,8 @@ Tasks supported:
 4 = Remove every Nth frame from images folder
 5 = Remove label files if matching image not found
 6 = Renumber all files sequentially (frame_00000, frame_00001, ...)
+7 = Remove small segments below area threshold
+8 = Merge nearby segments of same class (connect small gaps)
 
 Requirements:
     pip install shapely
@@ -38,18 +40,18 @@ from shapely.ops import unary_union
 # CONFIG
 # =========================
 
-LABEL_FOLDER = r"dataset_preprocess/labels"
-IMAGE_FOLDER = r"dataset_preprocess/images"
+LABEL_FOLDER = r"dataset_preprocess/mapillary-full-yolo.yolov11/train/labels"
+IMAGE_FOLDER = r"dataset_preprocess/mapillary-full-yolo.yolov11/train/images"
 
 START_FRAME = 0
-END_FRAME   = 1600
+END_FRAME   = 4000
 
 # Select task:
-TASK = 3
+TASK = 6
 
 # -------------------------
 # TASK 1 CONFIG (remap)
-OLD_CLASS = 2
+OLD_CLASS = 5
 NEW_CLASS = 1
 
 # -------------------------
@@ -66,10 +68,17 @@ DELETE_CLASS = 4
 KEEP_EVERY_NTH = 2      # every 4th frame
 
 # --------------------------------------------------
-MIN_AREA = 1e-7
+MIN_AREA = 1e-4
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
+# --------------------------------------------------
+# TASK 6 : renumber files sequentially
+start_index=0
+
+# -------------------------------------------------- 
+# TASK 8 CONFIG (merge close segments) 
+MERGE_DISTANCE = 0.005   
 
 # =========================
 # HELPERS
@@ -283,6 +292,12 @@ def process_labels():
         
         elif TASK == 3:
             new_lines = task_delete_class(lines)
+
+        elif TASK == 7:
+            new_lines = task_remove_small_segments(lines)
+
+        elif TASK == 8:
+            new_lines = task_merge_close_segments(lines)
         
         else:
             return
@@ -426,8 +441,9 @@ def renumber_files():
     # -------------------------
     # PASS 2 : rename temp -> final
     # -------------------------
-    for new_idx, temp_img, img_ext, temp_lbl in temp_records:
+    for idx, temp_img, img_ext, temp_lbl in temp_records:
 
+        new_idx = start_index + idx
         new_name = f"frame_{new_idx:05d}"
 
         final_img = os.path.join(IMAGE_FOLDER, new_name + img_ext)
@@ -441,13 +457,80 @@ def renumber_files():
 
     print("Renumbering complete.")
 
+# =========================
+# TASK 7
+# Remove small segments
+# =========================
+def task_remove_small_segments(lines):
+    out_lines = []
+
+    for line in lines:
+        parsed = parse_line(line)
+        if not parsed:
+            continue
+
+        cls, pts = parsed
+        poly = polygon_from_pts(pts)
+
+        if poly.area < MIN_AREA:
+            continue  # drop small segment
+
+        out_lines.extend(poly_to_yolo_lines(cls, poly))
+
+    return out_lines
+
+# =========================
+# TASK 8
+# Merge nearby segments of same class
+# =========================
+def task_merge_close_segments(lines):
+    class_polys = {}
+
+    # collect polygons per class
+    for line in lines:
+        parsed = parse_line(line)
+        if not parsed:
+            continue
+
+        cls, pts = parsed
+        poly = polygon_from_pts(pts)
+
+        if poly.area < MIN_AREA:
+            continue
+
+        class_polys.setdefault(cls, []).append(poly)
+
+    out_lines = []
+
+    for cls, polys in class_polys.items():
+
+        if not polys:
+            continue
+
+        # expand polygons slightly → connect nearby ones
+        expanded = [p.buffer(MERGE_DISTANCE) for p in polys]
+
+        # merge
+        merged = unary_union(expanded)
+
+        # shrink back
+        merged = merged.buffer(-MERGE_DISTANCE)
+
+        # clean geometry
+        if not merged.is_valid:
+            merged = merged.buffer(0)
+
+        out_lines.extend(poly_to_yolo_lines(cls, merged))
+
+    return out_lines
+
 # ==================================================
 # MAIN
 # ==================================================
 
 def main():
 
-    if TASK in [1, 2, 3]:
+    if TASK in [1, 2, 3, 7, 8]:
         process_labels()
 
     elif TASK == 4:
