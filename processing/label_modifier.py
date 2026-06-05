@@ -40,11 +40,11 @@ from shapely.ops import unary_union
 # CONFIG
 # =========================
 
-LABEL_FOLDER = r"dataset_preprocess/mapillary-full-yolo.yolov11/train/labels"
-IMAGE_FOLDER = r"dataset_preprocess/mapillary-full-yolo.yolov11/train/images"
+LABEL_FOLDER = r"dataset/labels"
+IMAGE_FOLDER = r"dataset/images"
 
 START_FRAME = 0
-END_FRAME   = 4000
+END_FRAME   = 40000
 
 # Select task:
 TASK = 6
@@ -56,8 +56,8 @@ NEW_CLASS = 1
 
 # -------------------------
 # TASK 2 CONFIG (subtract overlap)
-REMOVE_CLASS = 4      # remove this region
-FROM_CLASS   = 1      # from this class
+REMOVE_CLASS = 0      # remove this region
+FROM_CLASS   = 2      # from this class
 
 # -------------------------
 # TASK 3 CONFIG (delete class)
@@ -68,7 +68,7 @@ DELETE_CLASS = 4
 KEEP_EVERY_NTH = 2      # every 4th frame
 
 # --------------------------------------------------
-MIN_AREA = 1e-4
+MIN_AREA = 1e-3
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
@@ -402,11 +402,12 @@ def renumber_files():
         if ext not in IMAGE_EXTS:
             continue
 
-        frame_no = get_frame_number(file)
-        if frame_no is None:
-            continue
+        # frame_no = get_frame_number(file)
+        # if frame_no is None:
+        #     continue
 
-        image_files.append((frame_no, file))
+        # image_files.append((frame_no, file))
+        image_files.append(file)
 
     # sort by original frame number
     image_files.sort(key=lambda x: x[0])
@@ -421,7 +422,7 @@ def renumber_files():
     # -------------------------
     temp_records = []
 
-    for idx, (old_no, img_file) in enumerate(image_files):
+    for idx, img_file in enumerate(image_files):
         img_ext = Path(img_file).suffix
         old_img = os.path.join(IMAGE_FOLDER, img_file)
 
@@ -444,7 +445,7 @@ def renumber_files():
     for idx, temp_img, img_ext, temp_lbl in temp_records:
 
         new_idx = start_index + idx
-        new_name = f"frame_{new_idx:05d}"
+        new_name = f"mapillary_{new_idx:05d}"
 
         final_img = os.path.join(IMAGE_FOLDER, new_name + img_ext)
         os.rename(temp_img, final_img)
