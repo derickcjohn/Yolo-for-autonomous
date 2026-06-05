@@ -22,9 +22,10 @@ class_map = {
     "manhole cover": 5,
     "road marking": 6,
     "step": 7,
-    "sidewalk border": 8,
+    "curb": 8,
     "drain cover": 9,
     "gully grate": 10,
+    "tactile paving": 11
     
 }
 
@@ -116,18 +117,19 @@ for img_name in os.listdir(frame_dir):
 
         # 2. Apply remapping rules 
         step = raw_merged.get(7, np.zeros((h, w), dtype=np.uint8))
-        sidewalk_border = raw_merged.get(8, np.zeros((h, w), dtype=np.uint8))
+        curb = raw_merged.get(8, np.zeros((h, w), dtype=np.uint8))
         final_vehicle = raw_merged.get(4, np.zeros((h, w), dtype=np.uint8))
         crosswalk = raw_merged.get(0, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
-        sidewalk = raw_merged.get(1, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle & ~step)
-        pavement = raw_merged.get(2, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle & ~step)
+        sidewalk = raw_merged.get(1, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle & ~step & ~curb)
+        pavement = raw_merged.get(2, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle & ~step & ~curb)
         road = raw_merged.get(3, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
         manhole = raw_merged.get(5, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
         road_marking = raw_merged.get(6, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
         drain_cover = raw_merged.get(9, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
         gully_grate = raw_merged.get(10, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
+        tactile_paving = raw_merged.get(11, np.zeros((h, w), dtype=np.uint8)) & (~final_vehicle)
         
-        manhole = manhole | drain_cover | gully_grate
+        manhole = manhole | drain_cover | gully_grate | tactile_paving
         
 
         if np.sum(manhole) > 0:
@@ -195,7 +197,7 @@ for img_name in os.listdir(frame_dir):
         # rule4 = pavement & (~road)
 
         # sidewalk only -> sidewalk
-        rule6 = sidewalk & (~road)
+        rule6 = sidewalk & (~road) & (~pavement)
         
         # road only -> road
         rule7 = road & (~sidewalk) & (~pavement)
@@ -210,7 +212,6 @@ for img_name in os.listdir(frame_dir):
             0: crosswalk, 
             1: final_sidewalk, 
             2: final_road,
-            4: sidewalk_border,
         }
 
         # 3. Extract Simplified Polygons
