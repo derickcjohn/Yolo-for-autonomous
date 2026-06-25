@@ -1,0 +1,156 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# Mapillary semantic segmentation dataset (65 classes)
+# Documentation: https://docs.ultralytics.com/datasets/semantic
+# Example usage: yolo semantic train data=mapillary.yaml model=yolo26n-sem.pt
+# parent
+# ├── ultralytics
+# └── datasets
+#     └── mapillary ← downloads here (27 GB)
+#         └── images
+#             └── train
+#             └── val
+#         └── masks
+#             └── train
+#             └── val
+
+# Dataset root directory
+path: mapillary # dataset root dir
+train: images/train # train images (relative to 'path') 18000 images
+val: images/val # val images (relative to 'path') 2000 images
+
+masks_dir: masks # semantic mask directory
+
+# Mapillary 124-class labels
+names:
+  0: crosswalk
+  1: sidewalk
+  2: road
+  3: vehicle
+
+# Map 124 source label IDs to train IDs; ignore_label is converted to 255.
+label_mapping:
+  0: ignore_label
+  1: ignore_label
+  2: ignore_label
+  3: ignore_label
+  4: ignore_label
+  5: ignore_label
+  6: ignore_label
+  7: ignore_label
+  8: ignore_label
+  9: ignore_label
+  10: ignore_label
+  11: ignore_label
+  12: ignore_label
+  13: 2
+  14: 0
+  15: 1
+  16: 1
+  17: 2
+  18: 2
+  19: 1
+  20: ignore_label
+  21: 2
+  22: 2
+  23: 2
+  24: 1
+  25: 1
+  26: ignore_label
+  27: ignore_label
+  28: ignore_label
+  29: ignore_label
+  30: ignore_label
+  31: ignore_label
+  32: ignore_label
+  33: ignore_label
+  34: ignore_label
+  35: 2
+  36: 2
+  37: 2
+  38: 2
+  39: 2
+  40: 2
+  41: 2
+  42: 2
+  43: 2
+  44: 2
+  45: 0
+  46: 2
+  47: 2
+  48: 2
+  49: 2
+  50: 2
+  51: 2
+  52: 2
+  53: 2
+  54: 2
+  55: 2
+  56: 0
+  57: 2
+  58: 2
+  59: ignore_label
+  60: ignore_label
+  61: ignore_label
+  62: ignore_label
+  63: ignore_label
+  64: ignore_label
+  65: ignore_label
+  66: ignore_label
+  67: ignore_label
+  68: ignore_label
+  69: 2
+  70: ignore_label
+  71: ignore_label
+  72: ignore_label
+  73: ignore_label
+  74: 2
+  75: ignore_label
+  76: ignore_label
+  77: ignore_label
+  78: ignore_label
+  79: ignore_label
+  80: ignore_label
+  81: ignore_label
+  82: ignore_label
+  83: ignore_label
+  84: ignore_label
+  85: ignore_label
+  86: ignore_label
+  87: ignore_label
+  88: ignore_label
+  89: ignore_label
+  90: ignore_label
+  91: ignore_label
+  92: ignore_label
+  93: ignore_label
+  94: ignore_label
+  95: ignore_label
+  96: ignore_label
+  97: ignore_label
+  98: ignore_label
+  99: ignore_label
+  100: ignore_label
+  101: ignore_label
+  102: ignore_label
+  103: ignore_label
+  104: ignore_label
+  105: 3
+  106: ignore_label
+  107: 3
+  108: 3
+  109: 3
+  110: 3
+  111: ignore_label
+  112: 3
+  113: 3
+  114: 3
+  115: 3
+  116: 3
+  117: ignore_label
+  118: ignore_label
+  119: ignore_label
+  120: ignore_label
+  121: 1
+  122: ignore_label
+  123: ignore_label
