@@ -32,7 +32,7 @@ class_map = {
 # Connect to Roboflow
 client = InferenceHTTPClient(
   api_url="http://localhost:9001",
-  api_key="YlDx8OJor37qPzhHh2Si"
+  api_key="##############" #replace this
 )
 
 # Build classes parameter from class_map
