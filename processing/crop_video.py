@@ -23,7 +23,7 @@ def time_to_seconds(time_str):
             # Try direct seconds
             return int(float(time_str))
 
-def crop_video(input_path, output_path, start_time, end_time):
+def crop(input_path, output_path, start_time, end_time):
     """
     Crop a video from start_time to end_time and save it
     
