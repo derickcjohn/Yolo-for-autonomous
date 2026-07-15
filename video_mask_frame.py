@@ -4,10 +4,18 @@ import numpy as np
 from ultralytics import YOLO
 from ultralytics.utils.plotting import colors
 
-# -------------------- MODELS --------------------
-det_model = YOLO("yolo11n.pt")
-seg_model = YOLO("yolo11n-seg.pt")
+# ==================== CONFIGURATION ====================
+ 
+# Switch between "segmentation" or "semantic"
+SEG_MODE = "semantic"   # <-- change to "segmentation" to use instance seg model
 
+# -------------------- MODELS --------------------
+det_model = YOLO("yolo26n.pt")
+
+if SEG_MODE == "semantic":
+    seg_model = YOLO("yolo26n-sem.pt")
+else:
+    seg_model = YOLO("yolo26n-seg.pt")
 # Input and output video
 input_video = "street.mp4"
 output_video = "output.mp4"
@@ -27,13 +35,18 @@ out = cv2.VideoWriter(output_video, fourcc, fps, (width, height))
 
 # colour = colors()
 
+# Pre-compute the ignore class index for semantic mode
+if SEG_MODE == "semantic":
+    n_classes      = seg_model.model.nc
+    ignore_classes = n_classes - 1   # last class is background / ignore
+
 def darker(color, factor=0.5):
     return tuple(int(c * factor) for c in color)
 
-# -------------------- SEGMENTATION --------------------
+# -------------------- SEGMENTATION (instance) --------------------
 def draw_segmentation_on_black(frame, seg_result, canvas):
     """
-    Draw segmentation masks on black background
+    Draw instance segmentation masks on black background
     """
     if seg_result.masks is None:
         return canvas
@@ -56,7 +69,32 @@ def draw_segmentation_on_black(frame, seg_result, canvas):
         # -----DRAW BORDER-----
         if cls != 3:  # skip border for vehicles
             contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            cv2.drawContours(canvas, contours, -1, (0, 0, 0), 2)
+            cv2.drawContours(canvas, contours, -1, colors(cls, True), 2)
+
+    return canvas
+
+# -------------------- SEMANTIC --------------------
+
+def draw_semantic_on_black(frame, sem_result, canvas):
+    """
+    Draw semantic segmentation masks on black background
+    """
+    if sem_result.semantic_masks is None:
+        return canvas
+
+    class_map = sem_result.semantic_masks.data.cpu().numpy()
+
+    for cls in np.unique(class_map):
+        if cls == ignore_classes:
+            continue  # Skip the ignored class
+
+        if cls == 3:
+            color = (0, 255, 255)  # BGR yellow
+        else:
+            color = colors(int(cls), bgr=True)
+
+        mask = (class_map == cls)
+        canvas[mask] = color
 
     return canvas
 
@@ -95,14 +133,20 @@ def draw_detection_on_canvas(det_result, canvas):
 # -------------------- MAIN PROCESS --------------------
 def process_frame(frame):
     """
-    Runs segmentation + detection and combines results
+    Runs segmentation/semantic + detection and combines results
     """
-    seg_results = seg_model(frame, verbose=False)[0]
-    det_results = det_model(frame, classes=classes_to_keep, verbose=False)[0]
+    if SEG_MODE == "semantic":
+        seg_results = seg_model.predict(frame, task="semantic", conf=0.25, verbose=False)
+    else:
+        seg_results = seg_model(frame, verbose=False)
+    det_results = det_model(frame, classes=classes_to_keep, verbose=False)
 
     canvas = np.zeros_like(frame)
 
-    canvas = draw_segmentation_on_black(frame, seg_results, canvas)
+    if SEG_MODE == "semantic":
+        canvas = draw_semantic_on_black(frame, seg_results, canvas)
+    else:
+        canvas = draw_segmentation_on_black(frame, seg_results, canvas)
     canvas = draw_detection_on_canvas(det_results, canvas)
 
     return canvas
