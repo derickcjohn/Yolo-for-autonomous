@@ -1,0 +1,2 @@
+opencv-python-headless
+pyyaml>=6.0

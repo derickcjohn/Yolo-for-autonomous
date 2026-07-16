@@ -1,0 +1,3 @@
+to build docker go to the folder where the Dockerfile is present then type: docker build -t yolo-preprocess .
+To run from a local path do this: docker run --rm -v "C:\Users\derick\Downloads\Telegram Desktop:/data" yolo-preprocess --input "/data/Person.of.Interest.2011.S02E12.Prisoner's.Dilemma.10.mkv" --output "/data/frames"
+Running docker after modifying config.yaml : ocker run --rm -v "%cd%\config.yaml:/app/config.yaml" -v "C:\Users\derick\Downloads\Telegram Desktop:/data" yolo-preprocess --input "/data/Person.of.Interest.2011.S02E12.Prisoner's.Dilemma.10.mkv" --output "/data/frames"
