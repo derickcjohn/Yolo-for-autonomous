@@ -1,0 +1,5 @@
+# split-config.yaml
+
+train_ratio: 0.9
+
+seed: 42

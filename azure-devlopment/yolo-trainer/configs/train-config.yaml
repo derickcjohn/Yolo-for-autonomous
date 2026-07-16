@@ -1,0 +1,29 @@
+# train-config.yaml
+
+model: yolo26n-sem.pt
+
+epochs: 900
+batch: 16
+imgsz: 640
+
+lr0: 0.01
+lrf: 0.01
+patience: 100
+
+workers: 8
+device: 
+
+project: 
+run_name: 
+exist_ok: False
+save_dir: /output
+
+optimizer: auto
+resume: False
+
+cache: False
+
+save: True
+save_period: -1
+
+verbose: True
