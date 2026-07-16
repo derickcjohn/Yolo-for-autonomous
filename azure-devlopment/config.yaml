@@ -1,0 +1,12 @@
+# Tunable preprocessing parameters — NOT input/output paths. Paths come from --input/--output
+# (CLI args) instead, since Azure ML Pipeline steps inject a different path per run/environment;
+# baking a path into this file would break as soon as it runs anywhere but one fixed location.
+# See README.md.
+crop:
+  enabled: false # Set to true to crop the video before extracting frames. If false, the entire video will be used.
+  start: "00:00:00" # Start time for cropping the video (format: HH:MM:SS). Only used if crop.enabled is true.
+  end: "00:00:30" # End time for cropping the video (format: HH:MM:SS). Only used if crop.enabled is true.
+
+frames:
+  interval_seconds: 2 # Interval in seconds between frames to extract. For example, if set to 2, every 2nd second of the video will be saved as a frame.
+  start_number: 0 # Starting number for naming the saved frames. For example, if set to 0, the first saved frame will be named frame_00000.jpg, the second frame_00001.jpg, and so on.
